@@ -1,6 +1,7 @@
 package dynamodbkinsumer
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -54,4 +55,18 @@ func NewWithInterfaces(kinesis kinesisiface.KinesisAPI, dynamodb dynamodbiface.D
 	return &DynamoDBStreamsKinsumer{
 		k,
 	}, nil
+}
+
+func (ddbsk *DynamoDBStreamsKinsumer) Next() (streamRecord *StreamRecord, err error) {
+	data, err := ddbsk.Kinsumer.Next()
+	if err != nil {
+		return
+	}
+	sr := StreamRecord{}
+	err = json.Unmarshal(data, &sr)
+	if err != nil {
+		return
+	}
+	streamRecord = &sr
+	return
 }

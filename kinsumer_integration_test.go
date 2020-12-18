@@ -3,7 +3,6 @@
 package dynamodbkinsumer
 
 import (
-	"encoding/json"
 	"log"
 	"sync"
 	"testing"
@@ -25,7 +24,7 @@ func TestDynamoDBStreamsKinsumer(t *testing.T) {
 	}
 	k, err := NewWithSession(
 		sess,
-		"someTable.dev",
+		"someTableName",
 		"PK",
 		"someAppName",
 		uuid.NewV4().String(),
@@ -58,12 +57,7 @@ func TestDynamoDBStreamsKinsumer(t *testing.T) {
 				log.Fatalf("k.Next returned error %v", err)
 			}
 			if record != nil {
-				streamRecord := StreamRecord{}
-				err := json.Unmarshal(record, &streamRecord)
-				if err != nil {
-					log.Fatalf("%v", err)
-				}
-				log.Printf("record: %+v\n", streamRecord)
+				log.Printf("record: %+v\n", record)
 			} else {
 				return
 			}
