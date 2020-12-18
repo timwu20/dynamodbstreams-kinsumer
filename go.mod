@@ -9,5 +9,3 @@ require (
 	github.com/satori/uuid v1.2.0
 	github.com/twitchscience/kinsumer v0.0.0-20201111182439-cd685b6b5f68
 )
-
-replace github.com/twitchscience/kinsumer => /Users/timothywu/dev/kinsumer

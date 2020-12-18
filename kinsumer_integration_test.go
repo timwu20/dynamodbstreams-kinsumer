@@ -26,6 +26,7 @@ func TestDynamoDBStreamsKinsumer(t *testing.T) {
 	k, err := NewWithSession(
 		sess,
 		"someTable.dev",
+		"PK",
 		"someAppName",
 		uuid.NewV4().String(),
 		kinsumer.NewConfig(),
@@ -69,7 +70,7 @@ func TestDynamoDBStreamsKinsumer(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(6 * time.Minute)
+	time.Sleep(5 * time.Minute)
 	k.Stop()
 	wg.Wait()
 }

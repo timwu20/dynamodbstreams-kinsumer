@@ -17,24 +17,24 @@ type DynamoDBStreamsKinsumer struct {
 }
 
 // New returns a Kinsumer Interface with default kinesis and dynamodb instances, to be used in ec2 instances to get default auth and config
-func New(tableName, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
+func New(tableName, partitionKey, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
 	s, err := session.NewSession()
 	if err != nil {
 		return nil, err
 	}
-	return NewWithSession(s, tableName, applicationName, clientName, config)
+	return NewWithSession(s, tableName, partitionKey, applicationName, clientName, config)
 }
 
 // NewWithSession should be used if you want to override the Kinesis and Dynamo instances with a non-default aws session
-func NewWithSession(session *session.Session, tableName, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
+func NewWithSession(session *session.Session, tableName, partitionKey, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
 	s := dynamodbstreams.New(session)
-	k := &DynamoDBStreamsKinesisAdapter{s, "PK"}
+	k := &DynamoDBStreamsKinesisAdapter{s, partitionKey}
 	d := dynamodb.New(session)
-	return NewWithInterfaces(k, d, s, tableName, applicationName, clientName, config)
+	return NewWithInterfaces(k, d, s, tableName, partitionKey, applicationName, clientName, config)
 }
 
 // NewWithInterfaces allows you to override the Kinesis and Dynamo instances for mocking or using a local set of servers
-func NewWithInterfaces(kinesis kinesisiface.KinesisAPI, dynamodb dynamodbiface.DynamoDBAPI, streamsAPI dynamodbstreamsiface.DynamoDBStreamsAPI, tableName, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
+func NewWithInterfaces(kinesis kinesisiface.KinesisAPI, dynamodb dynamodbiface.DynamoDBAPI, streamsAPI dynamodbstreamsiface.DynamoDBStreamsAPI, tableName, partitionKey, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
 	listStreamsOutput, err := streamsAPI.ListStreams(&dynamodbstreams.ListStreamsInput{
 		TableName: &tableName,
 	})
