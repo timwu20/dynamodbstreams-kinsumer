@@ -129,8 +129,17 @@ func (sr streamRecord) MarshalJSON() (b []byte, err error) {
 }
 
 func (ddbska DynamoDBStreamsKinesisAdapter) GetRecords(input *kinesis.GetRecordsInput) (output *kinesis.GetRecordsOutput, err error) {
+	var limit *int64
+	if input.Limit != nil {
+		// DynamoDB Streams has max limit of 1000 records
+		if *input.Limit > 1000 {
+			*limit = 1000
+		} else {
+			limit = input.Limit
+		}
+	}
 	streamsOut, err := ddbska.streamsAPI.GetRecords(&dynamodbstreams.GetRecordsInput{
-		Limit:         aws.Int64(1000),
+		Limit:         limit,
 		ShardIterator: input.ShardIterator,
 	})
 	if err != nil {
