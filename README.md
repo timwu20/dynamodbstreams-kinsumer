@@ -1,5 +1,7 @@
 # dynamodbstreams-kinsumer
 
+[![timwu20](https://circleci.com/gh/timwu20/dynamodbstreams-kinsumer.svg?style=shield)](https://app.circleci.com/pipelines/github/timwu20/dynamodbstreams-kinsumer)
+
 Provides the same functionality as DynamoDB Streams Kinesis Adapter but written in Go.  This library does not depend on the Java MultiLangDaemon.  Consuming and checkpointing is handled by [Kinsumer](https://github.com/twitchscience/kinsumer). 
 
 ## Example
