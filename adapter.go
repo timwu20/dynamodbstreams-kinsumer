@@ -41,8 +41,17 @@ func (ddbska DynamoDBStreamsKinesisAdapter) DescribeStream(input *kinesis.Descri
 	}
 	var streamStatus string
 	switch *streamsOut.StreamDescription.StreamStatus {
-	case "ENABLED":
-		streamStatus = "ACTIVE"
+	case dynamodbstreams.StreamStatusEnabled:
+		streamStatus = kinesis.StreamStatusActive
+	case dynamodbstreams.StreamStatusDisabled:
+		streamStatus = kinesis.StreamStatusDeleting
+	case dynamodbstreams.StreamStatusEnabling:
+		streamStatus = kinesis.StreamStatusCreating
+	case dynamodbstreams.StreamStatusDisabling:
+		streamStatus = kinesis.StreamStatusUpdating
+	default:
+		err = fmt.Errorf("unsupported StreamStatus: %s", *streamsOut.StreamDescription.StreamStatus)
+		return
 	}
 	output = &kinesis.DescribeStreamOutput{
 		StreamDescription: &kinesis.StreamDescription{
