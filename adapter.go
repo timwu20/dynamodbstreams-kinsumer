@@ -1,9 +1,7 @@
 package dynamodbkinsumer
 
 import (
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
@@ -12,11 +10,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 )
 
+// DynamoDBStreamsKinesisAdapter is an adapter for DynamoDB Streams to work with kinesisiface.kinesisAPI
 type DynamoDBStreamsKinesisAdapter struct {
 	streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
 	PartitionKeyAttribute string
 }
 
+// DescribeStream calls DynamoDBStreams.DescribeStream
 func (ddbska DynamoDBStreamsKinesisAdapter) DescribeStream(input *kinesis.DescribeStreamInput) (output *kinesis.DescribeStreamOutput, err error) {
 	streamsInput := dynamodbstreams.DescribeStreamInput{
 		ExclusiveStartShardId: input.ExclusiveStartShardId,
@@ -64,6 +64,7 @@ func (ddbska DynamoDBStreamsKinesisAdapter) DescribeStream(input *kinesis.Descri
 	return
 }
 
+// ListShards calls DynamoDBStreamsKinesisAdapter.DescribeStreamOutput for Shards
 func (ddbska DynamoDBStreamsKinesisAdapter) ListShards(input *kinesis.ListShardsInput) (*kinesis.ListShardsOutput, error) {
 	// must use DescribeStream() since dynamodbstreams doesn't have ListShards
 	kinesisDescribeStreamInput := &kinesis.DescribeStreamInput{
@@ -80,6 +81,7 @@ func (ddbska DynamoDBStreamsKinesisAdapter) ListShards(input *kinesis.ListShards
 	}, nil
 }
 
+// GetShardIterator calls DynamoDBStreams.GetShardIterator
 func (ddbska DynamoDBStreamsKinesisAdapter) GetShardIterator(input *kinesis.GetShardIteratorInput) (output *kinesis.GetShardIteratorOutput, err error) {
 	streamsOut, err := ddbska.streamsAPI.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
 		ShardId:           input.ShardId,
@@ -96,47 +98,7 @@ func (ddbska DynamoDBStreamsKinesisAdapter) GetShardIterator(input *kinesis.GetS
 	return
 }
 
-type StreamRecord struct {
-	ApproximateCreationDateTime *time.Time
-	Keys                        map[string]interface{}
-	NewImage                    map[string]interface{}
-	OldImage                    map[string]interface{}
-	SequenceNumber              *string
-	SizeBytes                   *int64
-	StreamViewType              *string
-}
-
-type streamRecord dynamodbstreams.StreamRecord
-
-func (sr streamRecord) MarshalJSON() (b []byte, err error) {
-	keys := make(map[string]interface{})
-	err = dynamodbattribute.UnmarshalMap(sr.Keys, &keys)
-	if err != nil {
-		return
-	}
-	newImage := make(map[string]interface{})
-	err = dynamodbattribute.UnmarshalMap(sr.NewImage, &newImage)
-	if err != nil {
-		return
-	}
-	oldImage := make(map[string]interface{})
-	err = dynamodbattribute.UnmarshalMap(sr.OldImage, &oldImage)
-	if err != nil {
-		return
-	}
-	h := StreamRecord{
-		ApproximateCreationDateTime: sr.ApproximateCreationDateTime,
-		Keys:                        keys,
-		NewImage:                    newImage,
-		OldImage:                    oldImage,
-		SequenceNumber:              sr.SequenceNumber,
-		SizeBytes:                   sr.SizeBytes,
-		StreamViewType:              sr.StreamViewType,
-	}
-	b, err = json.Marshal(h)
-	return
-}
-
+// GetRecords calls DynamoDBStreams.GetRecords
 func (ddbska DynamoDBStreamsKinesisAdapter) GetRecords(input *kinesis.GetRecordsInput) (output *kinesis.GetRecordsOutput, err error) {
 	var limit *int64
 	if input.Limit != nil {
@@ -158,7 +120,7 @@ func (ddbska DynamoDBStreamsKinesisAdapter) GetRecords(input *kinesis.GetRecords
 	for i, record := range streamsOut.Records {
 		streamRecord := streamRecord(*record.Dynamodb)
 		var data []byte
-		data, err = streamRecord.MarshalJSON()
+		data, err = streamRecord.StreamRecord()
 		if err != nil {
 			return
 		}
