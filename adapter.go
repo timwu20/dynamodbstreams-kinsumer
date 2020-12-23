@@ -1,6 +1,7 @@
 package dynamodbkinsumer
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -98,13 +99,44 @@ func (ddbska DynamoDBStreamsKinesisAdapter) GetShardIterator(input *kinesis.GetS
 	return
 }
 
+type streamRecord dynamodbstreams.StreamRecord
+
+func (sr streamRecord) StreamRecordJSON() (b []byte, err error) {
+	keys := make(map[string]interface{})
+	err = dynamodbattribute.UnmarshalMap(sr.Keys, &keys)
+	if err != nil {
+		return
+	}
+	newImage := make(map[string]interface{})
+	err = dynamodbattribute.UnmarshalMap(sr.NewImage, &newImage)
+	if err != nil {
+		return
+	}
+	oldImage := make(map[string]interface{})
+	err = dynamodbattribute.UnmarshalMap(sr.OldImage, &oldImage)
+	if err != nil {
+		return
+	}
+	h := StreamRecord{
+		ApproximateCreationDateTime: sr.ApproximateCreationDateTime,
+		Keys:                        keys,
+		NewImage:                    newImage,
+		OldImage:                    oldImage,
+		SequenceNumber:              sr.SequenceNumber,
+		SizeBytes:                   sr.SizeBytes,
+		StreamViewType:              sr.StreamViewType,
+	}
+	b, err = json.Marshal(h)
+	return
+}
+
 // GetRecords calls DynamoDBStreams.GetRecords
 func (ddbska DynamoDBStreamsKinesisAdapter) GetRecords(input *kinesis.GetRecordsInput) (output *kinesis.GetRecordsOutput, err error) {
 	var limit *int64
 	if input.Limit != nil {
 		// DynamoDB Streams has max limit of 1000 records
 		if *input.Limit > 1000 {
-			*limit = 1000
+			limit = aws.Int64(1000)
 		} else {
 			limit = input.Limit
 		}
@@ -120,23 +152,29 @@ func (ddbska DynamoDBStreamsKinesisAdapter) GetRecords(input *kinesis.GetRecords
 	for i, record := range streamsOut.Records {
 		streamRecord := streamRecord(*record.Dynamodb)
 		var data []byte
-		data, err = streamRecord.StreamRecord()
+		data, err = streamRecord.StreamRecordJSON()
 		if err != nil {
 			return
 		}
 		var keys map[string]interface{}
 		dynamodbattribute.UnmarshalMap(record.Dynamodb.Keys, &keys)
+		partitionKey, ok := keys[ddbska.PartitionKeyAttribute]
+		if !ok || partitionKey == nil {
+			err = fmt.Errorf("Unable to extract partition key from: %+v", keys)
+			return
+		}
 		records[i] = &kinesis.Record{
 			ApproximateArrivalTimestamp: record.Dynamodb.ApproximateCreationDateTime,
 			SequenceNumber:              record.Dynamodb.SequenceNumber,
 			Data:                        data,
-			PartitionKey:                aws.String(fmt.Sprintf("%s", keys[ddbska.PartitionKeyAttribute])),
+			PartitionKey:                aws.String(fmt.Sprintf("%s", partitionKey)),
 		}
 	}
 	output = &kinesis.GetRecordsOutput{
-		NextShardIterator:  streamsOut.NextShardIterator,
-		Records:            records,
-		MillisBehindLatest: aws.Int64(0),
+		NextShardIterator: streamsOut.NextShardIterator,
+		Records:           records,
+		// not provided by dynamodbstreams
+		MillisBehindLatest: aws.Int64(-1),
 	}
 	return
 }

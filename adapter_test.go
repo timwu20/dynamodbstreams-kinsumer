@@ -1,11 +1,13 @@
 package dynamodbkinsumer
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams/dynamodbstreamsiface"
 	"github.com/aws/aws-sdk-go/service/kinesis"
@@ -17,6 +19,7 @@ type fakeStreamsAPI struct {
 	StreamStatus string
 	Shards       []*dynamodbstreams.Shard
 	err          error
+	Records      []*dynamodbstreams.Record
 }
 
 func (ns fakeStreamsAPI) DescribeStream(*dynamodbstreams.DescribeStreamInput) (*dynamodbstreams.DescribeStreamOutput, error) {
@@ -29,6 +32,11 @@ func (ns fakeStreamsAPI) DescribeStream(*dynamodbstreams.DescribeStreamInput) (*
 }
 func (ns fakeStreamsAPI) GetShardIterator(*dynamodbstreams.GetShardIteratorInput) (*dynamodbstreams.GetShardIteratorOutput, error) {
 	return &dynamodbstreams.GetShardIteratorOutput{}, ns.err
+}
+func (ns fakeStreamsAPI) GetRecords(*dynamodbstreams.GetRecordsInput) (*dynamodbstreams.GetRecordsOutput, error) {
+	return &dynamodbstreams.GetRecordsOutput{
+		Records: ns.Records,
+	}, ns.err
 }
 
 func TestDescribeStream(t *testing.T) {
@@ -269,15 +277,7 @@ func TestGetShardIterator(t *testing.T) {
 		{
 			name: "happy path",
 			fields: fields{
-				streamsAPI: &fakeStreamsAPI{
-					StreamStatus: dynamodbstreams.StreamStatusEnabled,
-					Shards: []*dynamodbstreams.Shard{
-						{
-							ShardId:             aws.String("someShardId"),
-							SequenceNumberRange: &dynamodbstreams.SequenceNumberRange{},
-						},
-					},
-				},
+				streamsAPI:            &fakeStreamsAPI{},
 				PartitionKeyAttribute: "PK",
 			},
 			args: args{
@@ -289,13 +289,6 @@ func TestGetShardIterator(t *testing.T) {
 			name: "GetShardIterator error",
 			fields: fields{
 				streamsAPI: &fakeStreamsAPI{
-					StreamStatus: dynamodbstreams.StreamStatusEnabled,
-					Shards: []*dynamodbstreams.Shard{
-						{
-							ShardId:             aws.String("someShardId"),
-							SequenceNumberRange: &dynamodbstreams.SequenceNumberRange{},
-						},
-					},
 					err: fmt.Errorf("yo"),
 				},
 				PartitionKeyAttribute: "PK",
@@ -325,6 +318,19 @@ func TestGetShardIterator(t *testing.T) {
 }
 
 func TestGetRecords(t *testing.T) {
+	expectedStreamRecord := StreamRecord{
+		Keys: map[string]interface{}{
+			"PK": "somePK",
+		},
+		NewImage: map[string]interface{}{},
+		OldImage: map[string]interface{}{},
+	}
+	streamRecordJSON, err := json.Marshal(expectedStreamRecord)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+
 	type fields struct {
 		streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
 		PartitionKeyAttribute string
@@ -339,7 +345,118 @@ func TestGetRecords(t *testing.T) {
 		wantOutput *kinesis.GetRecordsOutput
 		wantErr    bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "no records",
+			fields: fields{
+				streamsAPI:            &fakeStreamsAPI{},
+				PartitionKeyAttribute: "PK",
+			},
+			args: args{
+				input: &kinesis.GetRecordsInput{},
+			},
+			wantOutput: &kinesis.GetRecordsOutput{
+				MillisBehindLatest: aws.Int64(-1),
+				Records:            []*kinesis.Record{},
+			},
+		},
+		{
+			name: "some records, limit 500",
+			fields: fields{
+				streamsAPI: &fakeStreamsAPI{
+					Records: []*dynamodbstreams.Record{
+						{
+							Dynamodb: &dynamodbstreams.StreamRecord{
+								Keys: map[string]*dynamodb.AttributeValue{
+									"PK": &dynamodb.AttributeValue{
+										S: aws.String("somePK"),
+									},
+								},
+							},
+						},
+					},
+				},
+				PartitionKeyAttribute: "PK",
+			},
+			args: args{
+				input: &kinesis.GetRecordsInput{
+					Limit: aws.Int64(500),
+				},
+			},
+			wantOutput: &kinesis.GetRecordsOutput{
+				MillisBehindLatest: aws.Int64(-1),
+				Records: []*kinesis.Record{
+					{
+						Data:         streamRecordJSON,
+						PartitionKey: aws.String("somePK"),
+					},
+				},
+			},
+		},
+		{
+			name: "some records, limit 5000",
+			fields: fields{
+				streamsAPI: &fakeStreamsAPI{
+					Records: []*dynamodbstreams.Record{
+						{
+							Dynamodb: &dynamodbstreams.StreamRecord{
+								Keys: map[string]*dynamodb.AttributeValue{
+									"PK": &dynamodb.AttributeValue{
+										S: aws.String("somePK"),
+									},
+								},
+							},
+						},
+					},
+				},
+				PartitionKeyAttribute: "PK",
+			},
+			args: args{
+				input: &kinesis.GetRecordsInput{
+					Limit: aws.Int64(5000),
+				},
+			},
+			wantOutput: &kinesis.GetRecordsOutput{
+				MillisBehindLatest: aws.Int64(-1),
+				Records: []*kinesis.Record{
+					{
+						Data:         streamRecordJSON,
+						PartitionKey: aws.String("somePK"),
+					},
+				},
+			},
+		},
+		{
+			name: "GetRecords error",
+			fields: fields{
+				streamsAPI: &fakeStreamsAPI{
+					err: fmt.Errorf("yo"),
+				},
+				PartitionKeyAttribute: "PK",
+			},
+			args: args{
+				input: &kinesis.GetRecordsInput{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "partition key error",
+			fields: fields{
+				streamsAPI: &fakeStreamsAPI{
+					Records: []*dynamodbstreams.Record{
+						{
+							Dynamodb: &dynamodbstreams.StreamRecord{
+								Keys: map[string]*dynamodb.AttributeValue{},
+							},
+						},
+					},
+				},
+				PartitionKeyAttribute: "PK",
+			},
+			args: args{
+				input: &kinesis.GetRecordsInput{},
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
