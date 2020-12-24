@@ -13,11 +13,12 @@ import (
 	"github.com/twitchscience/kinsumer"
 )
 
+// DynamoDBStreamsKinsumer is a Kinsumer for DynamoDB Streams
 type DynamoDBStreamsKinsumer struct {
 	*kinsumer.Kinsumer
 }
 
-// New returns a Kinsumer Interface with default kinesis and dynamodb instances, to be used in ec2 instances to get default auth and config
+// New returns a DynamoDBStreamsKinsumer
 func New(tableName, partitionKey, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
 	s, err := session.NewSession()
 	if err != nil {
@@ -26,16 +27,19 @@ func New(tableName, partitionKey, applicationName, clientName string, config kin
 	return NewWithSession(s, tableName, partitionKey, applicationName, clientName, config)
 }
 
-// NewWithSession should be used if you want to override the Kinesis and Dynamo instances with a non-default aws session
+// NewWithSession should be used if you want to override the Kinesis and DynamoDB instances with a non-default aws session
 func NewWithSession(session *session.Session, tableName, partitionKey, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
 	s := dynamodbstreams.New(session)
-	k := &DynamoDBStreamsKinesisAdapter{s, partitionKey}
+	k := &DynamoDBStreamsKinesisAdapter{
+		streamsAPI:            s,
+		partitionKeyAttribute: partitionKey,
+	}
 	d := dynamodb.New(session)
-	return NewWithInterfaces(k, d, s, tableName, partitionKey, applicationName, clientName, config)
+	return NewWithInterfaces(k, d, s, tableName, applicationName, clientName, config)
 }
 
-// NewWithInterfaces allows you to override the Kinesis and Dynamo instances for mocking or using a local set of servers
-func NewWithInterfaces(kinesis kinesisiface.KinesisAPI, dynamodb dynamodbiface.DynamoDBAPI, streamsAPI dynamodbstreamsiface.DynamoDBStreamsAPI, tableName, partitionKey, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
+// NewWithInterfaces allows you to override the Kinesis, DynamoDB Streams and DynamoDB instances for mocking or using a local set of servers
+func NewWithInterfaces(kinesis kinesisiface.KinesisAPI, dynamodb dynamodbiface.DynamoDBAPI, streamsAPI dynamodbstreamsiface.DynamoDBStreamsAPI, tableName, applicationName, clientName string, config kinsumer.Config) (*DynamoDBStreamsKinsumer, error) {
 	listStreamsOutput, err := streamsAPI.ListStreams(&dynamodbstreams.ListStreamsInput{
 		TableName: &tableName,
 	})
@@ -57,8 +61,18 @@ func NewWithInterfaces(kinesis kinesisiface.KinesisAPI, dynamodb dynamodbiface.D
 	}, nil
 }
 
+// Next calls Kinsumer.Next() and will return a StreamRecord
 func (ddbsk *DynamoDBStreamsKinsumer) Next() (streamRecord *StreamRecord, err error) {
-	data, err := ddbsk.Kinsumer.Next()
+	return ddbsk.next(ddbsk.Kinsumer)
+}
+
+type kinsumerNext interface {
+	Next() (data []byte, err error)
+}
+
+// next is a helper method which takes explicit kinsumerNext interface for testing
+func (ddbsk *DynamoDBStreamsKinsumer) next(k kinsumerNext) (streamRecord *StreamRecord, err error) {
+	data, err := k.Next()
 	if err != nil {
 		return
 	}

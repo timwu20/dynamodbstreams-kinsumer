@@ -20,6 +20,7 @@ type fakeStreamsAPI struct {
 	Shards       []*dynamodbstreams.Shard
 	err          error
 	Records      []*dynamodbstreams.Record
+	Streams      []*dynamodbstreams.Stream
 }
 
 func (ns fakeStreamsAPI) DescribeStream(*dynamodbstreams.DescribeStreamInput) (*dynamodbstreams.DescribeStreamOutput, error) {
@@ -38,11 +39,16 @@ func (ns fakeStreamsAPI) GetRecords(*dynamodbstreams.GetRecordsInput) (*dynamodb
 		Records: ns.Records,
 	}, ns.err
 }
+func (ns fakeStreamsAPI) ListStreams(*dynamodbstreams.ListStreamsInput) (*dynamodbstreams.ListStreamsOutput, error) {
+	return &dynamodbstreams.ListStreamsOutput{
+		Streams: ns.Streams,
+	}, ns.err
+}
 
 func TestDescribeStream(t *testing.T) {
 	type fields struct {
 		streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
-		PartitionKeyAttribute string
+		partitionKeyAttribute string
 	}
 	type args struct {
 		input *kinesis.DescribeStreamInput
@@ -60,7 +66,7 @@ func TestDescribeStream(t *testing.T) {
 				streamsAPI: &fakeStreamsAPI{
 					StreamStatus: dynamodbstreams.StreamStatusEnabled,
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{&kinesis.DescribeStreamInput{}},
 			wantOutput: &kinesis.DescribeStreamOutput{
@@ -78,7 +84,7 @@ func TestDescribeStream(t *testing.T) {
 				streamsAPI: &fakeStreamsAPI{
 					StreamStatus: dynamodbstreams.StreamStatusDisabled,
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{&kinesis.DescribeStreamInput{}},
 			wantOutput: &kinesis.DescribeStreamOutput{
@@ -96,7 +102,7 @@ func TestDescribeStream(t *testing.T) {
 				streamsAPI: &fakeStreamsAPI{
 					StreamStatus: dynamodbstreams.StreamStatusEnabling,
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{&kinesis.DescribeStreamInput{}},
 			wantOutput: &kinesis.DescribeStreamOutput{
@@ -114,7 +120,7 @@ func TestDescribeStream(t *testing.T) {
 				streamsAPI: &fakeStreamsAPI{
 					StreamStatus: dynamodbstreams.StreamStatusDisabling,
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{&kinesis.DescribeStreamInput{}},
 			wantOutput: &kinesis.DescribeStreamOutput{
@@ -138,7 +144,7 @@ func TestDescribeStream(t *testing.T) {
 						},
 					},
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{&kinesis.DescribeStreamInput{}},
 			wantOutput: &kinesis.DescribeStreamOutput{
@@ -162,7 +168,7 @@ func TestDescribeStream(t *testing.T) {
 					StreamStatus: dynamodbstreams.StreamStatusEnabled,
 					err:          fmt.Errorf("yo"),
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args:       args{&kinesis.DescribeStreamInput{}},
 			wantOutput: nil,
@@ -173,7 +179,7 @@ func TestDescribeStream(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ddbska := DynamoDBStreamsKinesisAdapter{
 				streamsAPI:            tt.fields.streamsAPI,
-				PartitionKeyAttribute: tt.fields.PartitionKeyAttribute,
+				partitionKeyAttribute: tt.fields.partitionKeyAttribute,
 			}
 			gotOutput, err := ddbska.DescribeStream(tt.args.input)
 			if (err != nil) != tt.wantErr {
@@ -190,7 +196,7 @@ func TestDescribeStream(t *testing.T) {
 func TestListShards(t *testing.T) {
 	type fields struct {
 		streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
-		PartitionKeyAttribute string
+		partitionKeyAttribute string
 	}
 	type args struct {
 		input *kinesis.ListShardsInput
@@ -214,7 +220,7 @@ func TestListShards(t *testing.T) {
 						},
 					},
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.ListShardsInput{},
@@ -235,7 +241,7 @@ func TestListShards(t *testing.T) {
 					StreamStatus: dynamodbstreams.StreamStatusEnabled,
 					err:          fmt.Errorf("yo"),
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args:    args{&kinesis.ListShardsInput{}},
 			wantErr: true,
@@ -245,7 +251,7 @@ func TestListShards(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ddbska := DynamoDBStreamsKinesisAdapter{
 				streamsAPI:            tt.fields.streamsAPI,
-				PartitionKeyAttribute: tt.fields.PartitionKeyAttribute,
+				partitionKeyAttribute: tt.fields.partitionKeyAttribute,
 			}
 			got, err := ddbska.ListShards(tt.args.input)
 			if (err != nil) != tt.wantErr {
@@ -262,7 +268,7 @@ func TestListShards(t *testing.T) {
 func TestGetShardIterator(t *testing.T) {
 	type fields struct {
 		streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
-		PartitionKeyAttribute string
+		partitionKeyAttribute string
 	}
 	type args struct {
 		input *kinesis.GetShardIteratorInput
@@ -278,7 +284,7 @@ func TestGetShardIterator(t *testing.T) {
 			name: "happy path",
 			fields: fields{
 				streamsAPI:            &fakeStreamsAPI{},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetShardIteratorInput{},
@@ -291,7 +297,7 @@ func TestGetShardIterator(t *testing.T) {
 				streamsAPI: &fakeStreamsAPI{
 					err: fmt.Errorf("yo"),
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetShardIteratorInput{},
@@ -303,7 +309,7 @@ func TestGetShardIterator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ddbska := DynamoDBStreamsKinesisAdapter{
 				streamsAPI:            tt.fields.streamsAPI,
-				PartitionKeyAttribute: tt.fields.PartitionKeyAttribute,
+				partitionKeyAttribute: tt.fields.partitionKeyAttribute,
 			}
 			gotOutput, err := ddbska.GetShardIterator(tt.args.input)
 			if (err != nil) != tt.wantErr {
@@ -333,7 +339,7 @@ func TestGetRecords(t *testing.T) {
 
 	type fields struct {
 		streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
-		PartitionKeyAttribute string
+		partitionKeyAttribute string
 	}
 	type args struct {
 		input *kinesis.GetRecordsInput
@@ -349,7 +355,7 @@ func TestGetRecords(t *testing.T) {
 			name: "no records",
 			fields: fields{
 				streamsAPI:            &fakeStreamsAPI{},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetRecordsInput{},
@@ -375,7 +381,7 @@ func TestGetRecords(t *testing.T) {
 						},
 					},
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetRecordsInput{
@@ -408,7 +414,7 @@ func TestGetRecords(t *testing.T) {
 						},
 					},
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetRecordsInput{
@@ -431,7 +437,7 @@ func TestGetRecords(t *testing.T) {
 				streamsAPI: &fakeStreamsAPI{
 					err: fmt.Errorf("yo"),
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetRecordsInput{},
@@ -450,7 +456,7 @@ func TestGetRecords(t *testing.T) {
 						},
 					},
 				},
-				PartitionKeyAttribute: "PK",
+				partitionKeyAttribute: "PK",
 			},
 			args: args{
 				input: &kinesis.GetRecordsInput{},
@@ -462,7 +468,7 @@ func TestGetRecords(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ddbska := DynamoDBStreamsKinesisAdapter{
 				streamsAPI:            tt.fields.streamsAPI,
-				PartitionKeyAttribute: tt.fields.PartitionKeyAttribute,
+				partitionKeyAttribute: tt.fields.partitionKeyAttribute,
 			}
 			gotOutput, err := ddbska.GetRecords(tt.args.input)
 			if (err != nil) != tt.wantErr {

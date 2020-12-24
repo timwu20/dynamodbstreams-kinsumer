@@ -13,8 +13,12 @@ import (
 
 // DynamoDBStreamsKinesisAdapter is an adapter for DynamoDB Streams to work with kinesisiface.kinesisAPI
 type DynamoDBStreamsKinesisAdapter struct {
+	// embed a pointer to Kinesis, will fulfill kinesisiface.KinesisAPI but panic if any methods
+	// called are not explicitly implemented
+	*kinesis.Kinesis
+
 	streamsAPI            dynamodbstreamsiface.DynamoDBStreamsAPI
-	PartitionKeyAttribute string
+	partitionKeyAttribute string
 }
 
 // DescribeStream calls DynamoDBStreams.DescribeStream
@@ -158,7 +162,7 @@ func (ddbska DynamoDBStreamsKinesisAdapter) GetRecords(input *kinesis.GetRecords
 		}
 		var keys map[string]interface{}
 		dynamodbattribute.UnmarshalMap(record.Dynamodb.Keys, &keys)
-		partitionKey, ok := keys[ddbska.PartitionKeyAttribute]
+		partitionKey, ok := keys[ddbska.partitionKeyAttribute]
 		if !ok || partitionKey == nil {
 			err = fmt.Errorf("Unable to extract partition key from: %+v", keys)
 			return
